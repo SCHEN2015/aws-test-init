@@ -130,7 +130,7 @@ function create_subnet()
         exit 1
     fi
 
-    # Prepare subnet details
+    # Prepare subnet parameter
     taga="cheshi_subnet_a_perf"
     tagb="cheshi_subnet_b_perf"
     tagc="cheshi_subnet_c_perf"
@@ -180,7 +180,7 @@ function create_subnet()
         # Modify auto-assign IP settings
         x=$(aws ec2 modify-subnet-attribute --subnet-id $subnetid --map-public-ip-on-launch --output json)
         if [ $? -eq 0 ]; then
-            echo "."
+            echo "configured auto assign public IP."
         else
             echo "$0: line $LINENO: \"aws ec2 modify-subnet-attribute\" failed."
             exit 1
@@ -188,7 +188,7 @@ function create_subnet()
 
         x=$(aws ec2 modify-subnet-attribute --subnet-id $subnetid --assign-ipv6-address-on-creation --output json)
         if [ $? -eq 0 ]; then
-            echo "."
+            echo "configured auto assign IPv6 address."
         else
             echo "$0: line $LINENO: \"aws ec2 modify-subnet-attribute\" failed."
             exit 1
@@ -204,14 +204,78 @@ function describe_subnet()
 }
 
 
+function create_route_table()
+{
+    # | Destination    | Target         |
+    # | :------------- | :------------- |
+    # | 0.0.0.0/0      | igw-12345678   |
+
+    # Get route table information
+    x=$(aws ec2 describe-route-tables --filters Name=vpc-id,Values=$(tag2id cheshi_vpc_perf) --output json)
+    if [ $? -eq 0 ]; then
+        vpcid=$(echo $x | jq -r .RouteTables[].VpcId)
+        tableid=$(echo $x | jq -r .RouteTables[].RouteTableId)
+    else
+        echo "$0: line $LINENO: \"aws ec2 describe-route-tables\" failed."
+        exit 1
+    fi
+
+    # Create tag
+    x=$(aws ec2 create-tags --resources $tableid --tags Key=Name,Value=cheshi_rtb_perf --output json)
+    if [ $? -eq 0 ]; then
+        echo "tag created for this resource."
+    else
+        echo "$0: line $LINENO: \"aws ec2 create-tags\" failed."
+        exit 1
+    fi
+
+    # Create routes for the route table
+    x=$(aws ec2 create-route --route-table-id $tableid --destination-cidr-block 0.0.0.0/0 --gateway-id $(tag2id cheshi_igw_perf) --output json)
+    if [ $? -eq 0 ]; then
+        echo "created a route for this route table."
+    else
+        echo "$0: line $LINENO: \"aws ec2 create-route\" failed."
+        exit 1
+    fi
+
+    x=$(aws ec2 create-route --route-table-id $tableid --destination-ipv6-cidr-block ::/0 --gateway-id $(tag2id cheshi_igw_perf) --output json)
+    if [ $? -eq 0 ]; then
+        echo "created a route for this route table."
+    else
+        echo "$0: line $LINENO: \"aws ec2 create-route\" failed."
+        exit 1
+    fi
+
+    # Associate the route table with subnets
+    subnetids=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=vpc-62aecc04 | jq -r .Subnets[].SubnetId)
+    for subnetid in subnetids; do
+        x=$(aws ec2 associate-route-table --route-table-id $tableid --subnet-id $subnetid)
+        if [ $? -eq 0 ]; then
+            echo "associated the route table with a subnet."
+        else
+            echo "$0: line $LINENO: \"aws ec2 associate-route-table\" failed."
+            exit 1
+        fi
+    done
+}
+
+
+function describe_route_table()
+{
+    [ -z "$1" ] && exit 1 || tableid=$1
+    aws ec2 describe-route-tables --route-table-ids $tableid --output table
+}
+
+
 function main()
 {
     date
     #describe_vpc $(tag2id cheshi_vpc_perf)
     #describe_igw $(tag2id cheshi_igw_perf)
-    describe_subnet $(tag2id cheshi_subnet_a_perf)
-    describe_subnet $(tag2id cheshi_subnet_b_perf)
-    describe_subnet $(tag2id cheshi_subnet_c_perf)
+    #describe_subnet $(tag2id cheshi_subnet_a_perf)
+    #describe_subnet $(tag2id cheshi_subnet_b_perf)
+    #describe_subnet $(tag2id cheshi_subnet_c_perf)
+    describe_route_table $(tag2id cheshi_rtb_perf)
 }
 
 main
