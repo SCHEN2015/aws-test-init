@@ -20,8 +20,8 @@ function create_vpc()
 {
     # Name tag: cheshi_vpc_perf
     # IPv4 CIDR block*: 10.22.0.0/16
-	# IPv6 CIDR block*: Amazon provided IPv6 CIDR block
-	# Tenancy: Default
+    # IPv6 CIDR block*: Amazon provided IPv6 CIDR block
+    # Tenancy: Default
     # DNS Hostnames: Yes
 
     # Create VPC
@@ -195,6 +195,7 @@ function create_route_table()
     # | Destination    | Target         |
     # | :------------- | :------------- |
     # | 0.0.0.0/0      | igw-12345678   |
+    # | ::/0           | igw-12345678   |
 
     # Get route table information
     x=$(aws ec2 describe-route-tables --filters Name=vpc-id,Values=$(tag2id cheshi_vpc_perf) --output json)
