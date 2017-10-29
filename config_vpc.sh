@@ -130,20 +130,6 @@ function create_subnet()
         exit 1
     fi
 
-    # Prepare subnet parameter
-    taga="cheshi_subnet_a_perf"
-    tagb="cheshi_subnet_b_perf"
-    tagc="cheshi_subnet_c_perf"
-
-    ipv4a=$(echo $ipv4blk | sed 's/0.0\/16/1.0\/24/')
-    ipv6a=$(echo $ipv6blk | sed 's/00::\/56/01::\/64/')
-
-    ipv4b=$(echo $ipv4blk | sed 's/0.0\/16/2.0\/24/')
-    ipv6b=$(echo $ipv6blk | sed 's/00::\/56/02::\/64/')
-
-    ipv4c=$(echo $ipv4blk | sed 's/0.0\/16/3.0\/24/')
-    ipv6c=$(echo $ipv6blk | sed 's/00::\/56/03::\/64/')
-
     # Create subnets
     n=0
     zones=$(aws ec2 describe-availability-zones | jq -r .AvailabilityZones[].ZoneName | sort)
