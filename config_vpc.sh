@@ -108,8 +108,8 @@ function describe_igw()
 
 function create_subnet()
 {
-    # Name tag: cheshi_subnet_perf
-    # VPC: vpc-12345678 | cheshi_vpc_perf
+    # Name tag: cheshi_subnet_x_perf
+    # VPC: vpc-12345678 | cheshi_vpc_x_perf
     # VPC CIDRs: (2 CIDRs with status "associated" should be shown)
     # Availability Zone: us-west-2a
     # IPv4 CIDR block: 10.22.1.0/24
@@ -145,7 +145,7 @@ function create_subnet()
         tag="cheshi_subnet_${l}_perf"
 
         # Create subnet
-        x=$(aws ec2 create-subnet --vpc-id $vpcid --cidr-block $ipv4 --ipv6-cidr-block $ipv6 --output json)
+        x=$(aws ec2 create-subnet --vpc-id $vpcid --availability-zone $zone --cidr-block $ipv4 --ipv6-cidr-block $ipv6 --output json)
         if [ $? -eq 0 ]; then
             subnetid=$(echo $x | jq -r .InternetGateway.InternetGatewayId)
             echo "new subnet created, resource-id = $subnetid."
@@ -234,7 +234,7 @@ function create_route_table()
     fi
 
     # Associate the route table with subnets
-    subnetids=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=vpc-62aecc04 | jq -r .Subnets[].SubnetId)
+    subnetids=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$vpcid --output json | jq -r .Subnets[].SubnetId)
     for subnetid in subnetids; do
         x=$(aws ec2 associate-route-table --route-table-id $tableid --subnet-id $subnetid)
         if [ $? -eq 0 ]; then
