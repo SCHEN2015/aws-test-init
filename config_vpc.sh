@@ -254,6 +254,94 @@ function describe_route_table()
 }
 
 
+function create_security_group()
+{
+    # Name tag: cheshi_sg_perf
+    # Group name: cheshi_sg_openall
+    # Description: Testing purpose only, opening to the world, be careful about the security.
+    # VPC: vpc-12345678 | cheshi_vpc_perf
+    #      (select the VPC you just created in the drop-down list)
+    #
+    # Click "Add another rule" to add the following tuples (if not exist)
+    # | Type            | Protocol       | Port Range     | Destination     |
+    # | :-------------- | :------------- | :------------- | :-------------- |
+    # | ALL Traffic     | ALL            | ALL            | 0.0.0.0/0, ::/0 |
+    # | ALL TCP         | TCP (6)        | ALL            | 0.0.0.0/0, ::/0 |
+    # | ALL UDP         | UDP (17)       | ALL            | 0.0.0.0/0, ::/0 |
+    # | ALL ICMP - IPv4 | ICMP (1)       | ALL            | 0.0.0.0/0       |
+    # | ALL ICMP - IPv6 | IPv6-ICMP (58) | ALL            | ::/0            |
+
+    # Create security group
+    x=$(aws ec2 create-security-group --group-name cheshi_sg_openall --description "Testing purpose only, opening to the world, be careful about the security." --vpc-id $(tag2id cheshi_vpc_perf) --output json)
+    if [ $? -eq 0 ]; then
+        groupid=$(echo $x | jq -r .GroupId)
+        echo "new security group created, resource-id = $groupid."
+    else
+        echo "$0: line $LINENO: \"aws ec2 create-security-group\" failed."
+        exit 1
+    fi
+
+    # Create tag
+    x=$(aws ec2 create-tags --resources $groupid --tags Key=Name,Value=cheshi_sg_perf --output json)
+    if [ $? -eq 0 ]; then
+        echo "tag created for this resource."
+    else
+        echo "$0: line $LINENO: \"aws ec2 create-tags\" failed."
+        exit 1
+    fi
+
+    # Remove rules from the security group
+    ipperm=$(aws ec2 describe-security-groups --group-ids $groupid --output json | jq -r .SecurityGroups[].IpPermissions)
+    x=$(aws ec2 revoke-security-group-ingress --group-id $groupid --ip-permissions "$ipperm" --output json)
+    if [ $? -eq 0 ]; then
+        echo "in-bound rules removed from the security group."
+    else
+        echo "$0: line $LINENO: \"aws ec2 revoke-security-group-ingress\" failed."
+        exit 1
+    fi
+
+    ipperm=$(aws ec2 describe-security-groups --group-ids $groupid --output json | jq -r .SecurityGroups[].IpPermissionsEgress)
+    x=$(aws ec2 revoke-security-group-egress --group-id $groupid --ip-permissions "$ipperm" --output json)
+    if [ $? -eq 0 ]; then
+        echo "out-bound rules removed from the security group."
+    else
+        echo "$0: line $LINENO: \"aws ec2 revoke-security-group-egress\" failed."
+        exit 1
+    fi
+
+    # Add rules to the security group
+    ipperm='[
+        {"IpProtocol": "tcp", "FromPort": 0, "ToPort": 65535, "IpRanges": [{"CidrIp": "0.0.0.0/0"}], "Ipv6Ranges": [{"CidrIpv6": "::/0"}]},
+        {"IpProtocol": "udp", "FromPort": 0, "ToPort": 65535, "IpRanges": [{"CidrIp": "0.0.0.0/0"}], "Ipv6Ranges": [{"CidrIpv6": "::/0"}]},
+        {"IpProtocol": "icmp", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]},
+        {"IpProtocol": "icmpv6", "FromPort": -1, "ToPort": -1, "Ipv6Ranges": [{"CidrIpv6": "::/0"}]}
+        ]'
+
+    x=$(aws ec2 authorize-security-group-ingress --group-id $groupid --ip-permissions "$ipperm" --output json)
+    if [ $? -eq 0 ]; then
+        echo "in-bound rules added to the security group."
+    else
+        echo "$0: line $LINENO: \"aws ec2 authorize-security-group-ingress\" failed."
+        exit 1
+    fi
+
+    x=$(aws ec2 authorize-security-group-egress --group-id $groupid --ip-permissions "$ipperm" --output json)
+    if [ $? -eq 0 ]; then
+        echo "out-bound rules added to the security group."
+    else
+        echo "$0: line $LINENO: \"aws ec2 authorize-security-group-egress\" failed."
+        exit 1
+    fi
+}
+
+
+function describe_security_group()
+{
+    [ -z "$1" ] && exit 1 || groupid=$1
+    aws ec2 describe-security-groups --group-ids $groupid --output table
+}
+
+
 function main()
 {
     date
@@ -262,7 +350,8 @@ function main()
     #describe_subnet $(tag2id cheshi_subnet_a_perf)
     #describe_subnet $(tag2id cheshi_subnet_b_perf)
     #describe_subnet $(tag2id cheshi_subnet_c_perf)
-    describe_route_table $(tag2id cheshi_rtb_perf)
+    #describe_route_table $(tag2id cheshi_rtb_perf)
+    describe_security_group $(tag2id cheshi_sg_perf)
 }
 
 main
