@@ -35,7 +35,7 @@ function create_vpc()
     fi
 
     # Create tag
-    x=$(aws ec2 create-tags --resources $vpcid --tags Key=Name,Value=cheshi_vpc_perf --output json)
+    x=$(aws ec2 create-tags --resources $vpcid --tags Key=Name,Value=${userid}_vpc_perf --output json)
     if [ $? -eq 0 ]; then
         echo "tag created for this resource."
     else
@@ -79,7 +79,7 @@ function create_igw()
     fi
 
     # Create tag
-    x=$(aws ec2 create-tags --resources $igwid --tags Key=Name,Value=cheshi_igw_perf --output json)
+    x=$(aws ec2 create-tags --resources $igwid --tags Key=Name,Value=${userid}_igw_perf --output json)
     if [ $? -eq 0 ]; then
         echo "tag created for this resource."
     else
@@ -88,7 +88,7 @@ function create_igw()
     fi
 
     # Attach to VPC
-    vpcid=$(tag2id cheshi_vpc_perf)
+    vpcid=$(tag2id ${userid}_vpc_perf)
     x=$(aws ec2 attach-internet-gateway --internet-gateway-id $igwid --vpc-id $vpcid --output json)
     if [ $? -eq 0 ]; then
         echo "attached igw to the vpc."
@@ -120,7 +120,7 @@ function create_subnet()
     #                  (Enable specified items)
 
     # Get VPC details
-    x=$(aws ec2 describe-vpcs --vpc-id $(tag2id cheshi_vpc_perf) --output json)
+    x=$(aws ec2 describe-vpcs --vpc-id $(tag2id ${userid}_vpc_perf) --output json)
     if [ $? -eq 0 ]; then
         vpcid=$(echo $x | jq -r .Vpcs[].VpcId)
         ipv4blk=$(echo $x | jq -r .Vpcs[].CidrBlock)
@@ -142,7 +142,7 @@ function create_subnet()
         # Subnet parameter
         ipv4=$(echo $ipv4blk | sed "s/0.0\/16/${n}.0\/24/")
         ipv6=$(echo $ipv6blk | sed "s/00::\/56/0${n}::\/64/")
-        tag="cheshi_subnet_${l}_perf"
+        tag="${userid}_subnet_${l}_perf"
 
         # Create subnet
         x=$(aws ec2 create-subnet --vpc-id $vpcid --availability-zone $zone --cidr-block $ipv4 --ipv6-cidr-block $ipv6 --output json)
@@ -198,7 +198,7 @@ function create_route_table()
     # | ::/0           | igw-12345678   |
 
     # Get route table information
-    x=$(aws ec2 describe-route-tables --filters Name=vpc-id,Values=$(tag2id cheshi_vpc_perf) --output json)
+    x=$(aws ec2 describe-route-tables --filters Name=vpc-id,Values=$(tag2id ${userid}_vpc_perf) --output json)
     if [ $? -eq 0 ]; then
         vpcid=$(echo $x | jq -r .RouteTables[].VpcId)
         tableid=$(echo $x | jq -r .RouteTables[].RouteTableId)
@@ -208,7 +208,7 @@ function create_route_table()
     fi
 
     # Create tag
-    x=$(aws ec2 create-tags --resources $tableid --tags Key=Name,Value=cheshi_rtb_perf --output json)
+    x=$(aws ec2 create-tags --resources $tableid --tags Key=Name,Value=${userid}_rtb_perf --output json)
     if [ $? -eq 0 ]; then
         echo "tag created for this resource."
     else
@@ -217,7 +217,7 @@ function create_route_table()
     fi
 
     # Create routes for the route table
-    x=$(aws ec2 create-route --route-table-id $tableid --destination-cidr-block 0.0.0.0/0 --gateway-id $(tag2id cheshi_igw_perf) --output json)
+    x=$(aws ec2 create-route --route-table-id $tableid --destination-cidr-block 0.0.0.0/0 --gateway-id $(tag2id ${userid}_igw_perf) --output json)
     if [ $? -eq 0 ]; then
         echo "created a route for this route table."
     else
@@ -225,7 +225,7 @@ function create_route_table()
         exit 1
     fi
 
-    x=$(aws ec2 create-route --route-table-id $tableid --destination-ipv6-cidr-block ::/0 --gateway-id $(tag2id cheshi_igw_perf) --output json)
+    x=$(aws ec2 create-route --route-table-id $tableid --destination-ipv6-cidr-block ::/0 --gateway-id $(tag2id ${userid}_igw_perf) --output json)
     if [ $? -eq 0 ]; then
         echo "created a route for this route table."
     else
@@ -272,7 +272,7 @@ function create_security_group()
     # | ALL ICMP - IPv6 | IPv6-ICMP (58) | ALL            | ::/0            |
 
     # Create security group
-    x=$(aws ec2 create-security-group --group-name cheshi_sg_openall --description "Testing purpose only, opening to the world, be careful about the security." --vpc-id $(tag2id cheshi_vpc_perf) --output json)
+    x=$(aws ec2 create-security-group --group-name ${userid}_sg_openall --description "Testing purpose only, opening to the world, be careful about the security." --vpc-id $(tag2id ${userid}_vpc_perf) --output json)
     if [ $? -eq 0 ]; then
         groupid=$(echo $x | jq -r .GroupId)
         echo "new security group created, resource-id = $groupid."
@@ -282,7 +282,7 @@ function create_security_group()
     fi
 
     # Create tag
-    x=$(aws ec2 create-tags --resources $groupid --tags Key=Name,Value=cheshi_sg_perf --output json)
+    x=$(aws ec2 create-tags --resources $groupid --tags Key=Name,Value=${userid}_sg_perf --output json)
     if [ $? -eq 0 ]; then
         echo "tag created for this resource."
     else
@@ -345,14 +345,16 @@ function describe_security_group()
 function main()
 {
     date
-    #describe_vpc $(tag2id cheshi_vpc_perf)
-    #describe_igw $(tag2id cheshi_igw_perf)
-    #describe_subnet $(tag2id cheshi_subnet_a_perf)
-    #describe_subnet $(tag2id cheshi_subnet_b_perf)
-    #describe_subnet $(tag2id cheshi_subnet_c_perf)
-    #describe_route_table $(tag2id cheshi_rtb_perf)
-    describe_security_group $(tag2id cheshi_sg_perf)
+    describe_vpc $(tag2id ${userid}_vpc_perf)
+    describe_igw $(tag2id ${userid}_igw_perf)
+    describe_subnet $(tag2id ${userid}_subnet_a_perf)
+    describe_subnet $(tag2id ${userid}_subnet_b_perf)
+    describe_subnet $(tag2id ${userid}_subnet_c_perf)
+    describe_route_table $(tag2id ${userid}_rtb_perf)
+    describe_security_group $(tag2id ${userid}_sg_perf)
 }
+
+userid=cheshi
 
 main
 
