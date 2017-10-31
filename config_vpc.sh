@@ -24,6 +24,9 @@ function create_vpc()
     # Tenancy: Default
     # DNS Hostnames: Yes
 
+    # Prepare parameter
+    echo "creating vpc with CIDR block: ${ipcidr:="10.22.0.0/16"}"
+
     # Create VPC
     x=$(aws ec2 create-vpc --cidr-block $ipcidr --amazon-provided-ipv6-cidr-block --instance-tenancy default --output json)
     if [ $? -eq 0 ]; then
@@ -379,7 +382,7 @@ function describe_vpc_network()
     describe_security_group $(tag2id ${userid}_sg_perf)
 }
 
-userid=cheshi
+ipcidr=10.99.0.0/16
 
 create_vpc_network
 describe_vpc_network
