@@ -185,8 +185,15 @@ function create_subnet()
 
 function describe_subnet()
 {
-    [ -z "$1" ] && exit 1 || subnetid=$1
+    [ -z "$1" ] && exit 1 || id=$1
+    if [[ $id = "subnet-"* ]]; then
+        aws ec2 describe-subnets --subnet-ids $id --output table
+    elif [[ $id = "vpc-"* ]]; then
+        subnetids=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$id --output json | jq -r .Subnets[].SubnetId)
+        for subnetid in subnetids; do
     aws ec2 describe-subnets --subnet-ids $subnetid --output table
+        done
+    fi
 }
 
 
