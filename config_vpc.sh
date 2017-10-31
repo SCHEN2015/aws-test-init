@@ -191,7 +191,7 @@ function describe_subnet()
     elif [[ $id = "vpc-"* ]]; then
         subnetids=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$id --output json | jq -r .Subnets[].SubnetId)
         for subnetid in subnetids; do
-    aws ec2 describe-subnets --subnet-ids $subnetid --output table
+            aws ec2 describe-subnets --subnet-ids $subnetid --output table
         done
     fi
 }
@@ -349,7 +349,18 @@ function describe_security_group()
 }
 
 
-function main()
+function create_vpc_network()
+{
+    date
+    create_vpc
+    create_igw
+    create_subnet
+    create_route_table
+    create_security_group
+}
+
+
+function describe_vpc_network()
 {
     date
     describe_vpc $(tag2id ${userid}_vpc_perf)
@@ -363,6 +374,7 @@ function main()
 
 userid=cheshi
 
-main
+create_vpc_network
+describe_vpc_network
 
 exit 0
