@@ -25,9 +25,9 @@ function create_vpc()
     # DNS Hostnames: Yes
 
     # Create VPC
-    x=$(aws ec2 create-vpc --cidr-block 10.22.0.0/16 --amazon-provided-ipv6-cidr-block --tenancy default --output json)
+    x=$(aws ec2 create-vpc --cidr-block $ipcidr --amazon-provided-ipv6-cidr-block --instance-tenancy default --output json)
     if [ $? -eq 0 ]; then
-        vpcid=$(echo $x | jq -r .VpcId)
+        vpcid=$(echo $x | jq -r .Vpc.VpcId)
         echo "new vpc created, resource-id = $vpcid."
     else
         echo "$0: line $LINENO: \"aws ec2 create-vpc\" failed."
@@ -44,9 +44,17 @@ function create_vpc()
     fi
 
     # Enable DNS
-    x=$(aws ec2 modify-vpc-attribute --vpc-id $vpcid --enable-dns-hostnames --enable-dns-support --output json)
+    x=$(aws ec2 modify-vpc-attribute --vpc-id $vpcid --enable-dns-support --output json)
     if [ $? -eq 0 ]; then
-        echo "enabled dns for this vpc."
+        echo "enabled dns support for this vpc."
+    else
+        echo "$0: line $LINENO: \"aws ec2 modify-vpc-attribute\" failed."
+        exit 1
+    fi
+
+    x=$(aws ec2 modify-vpc-attribute --vpc-id $vpcid --enable-dns-hostnames --output json)
+    if [ $? -eq 0 ]; then
+        echo "enabled dns hostnames for this vpc."
     else
         echo "$0: line $LINENO: \"aws ec2 modify-vpc-attribute\" failed."
         exit 1
@@ -147,7 +155,7 @@ function create_subnet()
         # Create subnet
         x=$(aws ec2 create-subnet --vpc-id $vpcid --availability-zone $zone --cidr-block $ipv4 --ipv6-cidr-block $ipv6 --output json)
         if [ $? -eq 0 ]; then
-            subnetid=$(echo $x | jq -r .InternetGateway.InternetGatewayId)
+            subnetid=$(echo $x | jq -r .Subnet.SubnetId)
             echo "new subnet created, resource-id = $subnetid."
         else
             echo "$0: line $LINENO: \"aws ec2 create-subnet\" failed."
@@ -190,8 +198,7 @@ function describe_subnet()
         aws ec2 describe-subnets --subnet-ids $id --output table
     elif [[ $id = "vpc-"* ]]; then
         subnetids=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$id --output json | jq -r .Subnets[].SubnetId)
-        for subnetid in subnetids; do
-            aws ec2 describe-subnets --subnet-ids $subnetid --output table
+        for subnetid in $subnetids; do
         done
     fi
 }
@@ -242,8 +249,8 @@ function create_route_table()
 
     # Associate the route table with subnets
     subnetids=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$vpcid --output json | jq -r .Subnets[].SubnetId)
-    for subnetid in subnetids; do
-        x=$(aws ec2 associate-route-table --route-table-id $tableid --subnet-id $subnetid)
+    for subnetid in $subnetids; do
+        x=$(aws ec2 associate-route-table --route-table-id $tableid --subnet-id $subnetid --output json)
         if [ $? -eq 0 ]; then
             echo "associated the route table with a subnet."
         else
