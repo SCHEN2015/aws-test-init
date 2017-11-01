@@ -318,6 +318,7 @@ function create_security_group()
 
     # Remove rules from the security group
     ipperm=$(aws ec2 describe-security-groups --group-ids $groupid --output json | jq -r .SecurityGroups[].IpPermissions)
+    if [ "$ipperm" != "[]" ]; then
     x=$(aws ec2 revoke-security-group-ingress --group-id $groupid --ip-permissions "$ipperm" --output json)
     if [ $? -eq 0 ]; then
         echo "in-bound rules removed from the security group."
@@ -325,14 +326,17 @@ function create_security_group()
         echo "$0: line $LINENO: \"aws ec2 revoke-security-group-ingress\" failed."
         exit 1
     fi
+    fi
 
     ipperm=$(aws ec2 describe-security-groups --group-ids $groupid --output json | jq -r .SecurityGroups[].IpPermissionsEgress)
+    if [ "$ipperm" != "[]" ]; then
     x=$(aws ec2 revoke-security-group-egress --group-id $groupid --ip-permissions "$ipperm" --output json)
     if [ $? -eq 0 ]; then
         echo "out-bound rules removed from the security group."
     else
         echo "$0: line $LINENO: \"aws ec2 revoke-security-group-egress\" failed."
         exit 1
+    fi
     fi
 
     # Add rules to the security group
