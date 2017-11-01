@@ -1,9 +1,12 @@
 #!/bin/bash
 
-# Resource should be created:
+# Resource to be created:
 # vpc-12345678 | cheshi_vpc_perf
 # igw-12345678 | cheshi_igw_perf
-# subnet-12345678 | cheshi_subnet_perf
+# subnet-12345671 | cheshi_subnet_a_perf
+# subnet-12345672 | cheshi_subnet_b_perf
+# subnet-12345673 | cheshi_subnet_c_perf
+# subnet-......   | cheshi_subnet_......
 # rtb-12345678 | cheshi_rtb_perf
 # sg-12345678 | cheshi_sg_perf
 
@@ -209,10 +212,15 @@ function describe_subnet()
 
 function create_route_table()
 {
+    # Add default routes to the IGW:
     # | Destination    | Target         |
     # | :------------- | :------------- |
     # | 0.0.0.0/0      | igw-12345678   |
     # | ::/0           | igw-12345678   |
+    #   (this tuple should be able to absence in the table)
+
+    # Create route table
+    # We don't need to create a new route table, we can use the default one.
 
     # Get route table information
     x=$(aws ec2 describe-route-tables --filters Name=vpc-id,Values=$(tag2id ${userid}_vpc_perf) --output json)
@@ -283,6 +291,7 @@ function create_security_group()
     # | Type            | Protocol       | Port Range     | Destination     |
     # | :-------------- | :------------- | :------------- | :-------------- |
     # | ALL Traffic     | ALL            | ALL            | 0.0.0.0/0, ::/0 |
+    #   (Adding this tuple is not supported by CLI)
     # | ALL TCP         | TCP (6)        | ALL            | 0.0.0.0/0, ::/0 |
     # | ALL UDP         | UDP (17)       | ALL            | 0.0.0.0/0, ::/0 |
     # | ALL ICMP - IPv4 | ICMP (1)       | ALL            | 0.0.0.0/0       |
