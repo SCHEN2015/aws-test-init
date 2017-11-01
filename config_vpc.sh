@@ -205,6 +205,7 @@ function describe_subnet()
     elif [[ $id = "vpc-"* ]]; then
         subnetids=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$id --output json | jq -r .Subnets[].SubnetId)
         for subnetid in $subnetids; do
+            describe_subnet $subnetid
         done
     fi
 }
