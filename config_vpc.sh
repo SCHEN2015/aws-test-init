@@ -77,6 +77,19 @@ function describe_vpc()
 }
 
 
+function delete_vpc()
+{
+    [ -z "$1" ] && exit 1 || vpcid=$1
+    x=$(aws ec2 delete-vpc --vpc-id $vpcid --output json)
+    if [ $? -eq 0 ]; then
+        echo "deleted this vpc."
+    else
+        echo "$0: line $LINENO: \"aws ec2 delete-vpc\" failed."
+        exit 1
+    fi
+}
+
+
 function create_igw()
 {
     # Name tag: cheshi_igw_perf
@@ -117,6 +130,31 @@ function describe_igw()
 {
     [ -z "$1" ] && exit 1 || igwid=$1
     aws ec2 describe-internet-gateways --internet-gateway-ids $igwid --output table
+}
+
+
+function delete_igw()
+{
+    [ -z "$1" ] && exit 1 || igwid=$1
+
+    # Detach from VPC
+    vpcid=$(tag2id ${userid}_vpc_perf)
+    x=$(aws ec2 detach-internet-gateway --internet-gateway-id $igwid --vpc-id $vpcid --output json)
+    if [ $? -eq 0 ]; then
+        echo "detached igw from the vpc."
+    else
+        echo "$0: line $LINENO: \"aws ec2 detach-internet-gateway\" failed."
+        exit 1
+    fi
+
+    # Delete IGW 
+    x=$(aws ec2 delete-internet-gateway --internet-gateway-id $igwid --output json)
+    if [ $? -eq 0 ]; then
+        echo "deleted this igw."
+    else
+        echo "$0: line $LINENO: \"aws ec2 delete-internet-gateway\" failed."
+        exit 1
+    fi
 }
 
 
@@ -211,6 +249,26 @@ function describe_subnet()
 }
 
 
+function delete_subnet()
+{
+    [ -z "$1" ] && exit 1 || id=$1
+    if [[ $id = "subnet-"* ]]; then
+        x=$(aws ec2 delete-subnet --subnet-id $id --output json)
+        if [ $? -eq 0 ]; then
+            echo "deleted subnet $id."
+        else
+            echo "$0: line $LINENO: \"aws ec2 delete-subnet\" failed."
+            exit 1
+        fi
+    elif [[ $id = "vpc-"* ]]; then
+        subnetids=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$id --output json | jq -r .Subnets[].SubnetId)
+        for subnetid in $subnetids; do
+            delete_subnet $subnetid
+        done
+    fi
+}
+
+
 function create_route_table()
 {
     # Add default routes to the IGW:
@@ -277,6 +335,39 @@ function describe_route_table()
 {
     [ -z "$1" ] && exit 1 || tableid=$1
     aws ec2 describe-route-tables --route-table-ids $tableid --output table
+}
+
+
+function delete_route_table()
+{
+    [ -z "$1" ] && exit 1 || tableid=$1
+
+    # Disassociate the route table with subnets (non-main association only)
+    assids=$(aws ec2 describe-route-tables --route-table-ids $tableid --output json | jq -r '.RouteTables[].Associations[] | select(.Main == false) | .RouteTableAssociationId')
+    for assid in $assids; do
+        x=$(aws ec2 disassociate-route-table --association-id $assid --output json)
+        if [ $? -eq 0 ]; then
+            echo "disassociated the route table with a subnet."
+        else
+            echo "$0: line $LINENO: \"aws ec2 disassociate-route-table\" failed."
+            exit 1
+        fi
+    done
+
+    # Delete routes from the route table
+    # We don't need to delete them, since they will not block our processing.
+
+    # Create tag
+    x=$(aws ec2 delete-tags --resources $tableid --tags Key=Name --output json)
+    if [ $? -eq 0 ]; then
+        echo "tag deleted for this resource."
+    else
+        echo "$0: line $LINENO: \"aws ec2 delete-tags\" failed."
+        exit 1
+    fi
+
+    # Delete route table
+    # We haven't actually created the route table, so we don't need to delete it.
 }
 
 
@@ -373,6 +464,19 @@ function describe_security_group()
 }
 
 
+function delete_security_group()
+{
+    [ -z "$1" ] && exit 1 || groupid=$1
+    x=$(aws ec2 delete-security-group --group-id $groupid --output json)
+    if [ $? -eq 0 ]; then
+        echo "deleted this security group."
+    else
+        echo "$0: line $LINENO: \"aws ec2 delete-security-group\" failed."
+        exit 1
+    fi
+}
+
+
 function create_vpc_network()
 {
     date
@@ -396,9 +500,24 @@ function describe_vpc_network()
     describe_security_group $(tag2id ${userid}_sg_perf)
 }
 
-ipcidr=10.99.0.0/16
 
-create_vpc_network
-describe_vpc_network
+function delete_vpc_network()
+{
+    date
+    delete_security_group $(tag2id ${userid}_sg_perf)
+    delete_route_table $(tag2id ${userid}_rtb_perf)
+    delete_subnet $(tag2id ${userid}_vpc_perf)
+    delete_igw $(tag2id ${userid}_igw_perf)
+    delete_vpc $(tag2id ${userid}_vpc_perf)
+}
+
+
+# main
+ipcidr=10.22.0.0/16
+userid=cheshi
+
+#create_vpc_network
+#describe_vpc_network
+#delete_vpc_network
 
 exit 0
