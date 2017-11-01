@@ -70,10 +70,11 @@ function create_vpc()
 
 function describe_vpc()
 {
-    [ -z "$1" ] && exit 1 || vpcid=$1
-    aws ec2 describe-vpcs --vpc-id $vpcid --output table
-    aws ec2 describe-vpc-attribute --vpc-id $vpcid --attribute enableDnsSupport --output table
-    aws ec2 describe-vpc-attribute --vpc-id $vpcid --attribute enableDnsHostnames --output table
+    [ -z "$1" ] && return 1 || vpcid=$1
+    aws ec2 describe-vpcs --vpc-id $vpcid --output table || return $?
+    aws ec2 describe-vpc-attribute --vpc-id $vpcid --attribute enableDnsSupport --output table || return $?
+    aws ec2 describe-vpc-attribute --vpc-id $vpcid --attribute enableDnsHostnames --output table || return $?
+    return 0
 }
 
 
@@ -128,8 +129,9 @@ function create_igw()
 
 function describe_igw()
 {
-    [ -z "$1" ] && exit 1 || igwid=$1
+    [ -z "$1" ] && return 1 || igwid=$1
     aws ec2 describe-internet-gateways --internet-gateway-ids $igwid --output table
+    return $?
 }
 
 
@@ -237,15 +239,18 @@ function create_subnet()
 
 function describe_subnet()
 {
-    [ -z "$1" ] && exit 1 || id=$1
+    [ -z "$1" ] && return 1 || id=$1
     if [[ $id = "subnet-"* ]]; then
         aws ec2 describe-subnets --subnet-ids $id --output table
+        return $?
     elif [[ $id = "vpc-"* ]]; then
         subnetids=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$id --output json | jq -r .Subnets[].SubnetId)
         for subnetid in $subnetids; do
             describe_subnet $subnetid
         done
+        return $?
     fi
+    return 1
 }
 
 
@@ -333,8 +338,9 @@ function create_route_table()
 
 function describe_route_table()
 {
-    [ -z "$1" ] && exit 1 || tableid=$1
+    [ -z "$1" ] && return 1 || tableid=$1
     aws ec2 describe-route-tables --route-table-ids $tableid --output table
+    return $?
 }
 
 
@@ -411,24 +417,24 @@ function create_security_group()
     # Remove rules from the security group
     ipperm=$(aws ec2 describe-security-groups --group-ids $groupid --output json | jq -r .SecurityGroups[].IpPermissions)
     if [ "$ipperm" != "[]" ]; then
-    x=$(aws ec2 revoke-security-group-ingress --group-id $groupid --ip-permissions "$ipperm" --output json)
-    if [ $? -eq 0 ]; then
-        echo "in-bound rules removed from the security group."
-    else
-        echo "$0: line $LINENO: \"aws ec2 revoke-security-group-ingress\" failed."
-        exit 1
-    fi
+        x=$(aws ec2 revoke-security-group-ingress --group-id $groupid --ip-permissions "$ipperm" --output json)
+        if [ $? -eq 0 ]; then
+            echo "in-bound rules removed from the security group."
+        else
+            echo "$0: line $LINENO: \"aws ec2 revoke-security-group-ingress\" failed."
+            exit 1
+        fi
     fi
 
     ipperm=$(aws ec2 describe-security-groups --group-ids $groupid --output json | jq -r .SecurityGroups[].IpPermissionsEgress)
     if [ "$ipperm" != "[]" ]; then
-    x=$(aws ec2 revoke-security-group-egress --group-id $groupid --ip-permissions "$ipperm" --output json)
-    if [ $? -eq 0 ]; then
-        echo "out-bound rules removed from the security group."
-    else
-        echo "$0: line $LINENO: \"aws ec2 revoke-security-group-egress\" failed."
-        exit 1
-    fi
+        x=$(aws ec2 revoke-security-group-egress --group-id $groupid --ip-permissions "$ipperm" --output json)
+        if [ $? -eq 0 ]; then
+            echo "out-bound rules removed from the security group."
+        else
+            echo "$0: line $LINENO: \"aws ec2 revoke-security-group-egress\" failed."
+            exit 1
+        fi
     fi
 
     # Add rules to the security group
@@ -459,8 +465,9 @@ function create_security_group()
 
 function describe_security_group()
 {
-    [ -z "$1" ] && exit 1 || groupid=$1
+    [ -z "$1" ] && return 1 || groupid=$1
     aws ec2 describe-security-groups --group-ids $groupid --output table
+    return $?
 }
 
 
@@ -493,9 +500,10 @@ function describe_vpc_network()
     date
     describe_vpc $(tag2id ${userid}_vpc_perf)
     describe_igw $(tag2id ${userid}_igw_perf)
-    describe_subnet $(tag2id ${userid}_subnet_a_perf)
-    describe_subnet $(tag2id ${userid}_subnet_b_perf)
-    describe_subnet $(tag2id ${userid}_subnet_c_perf)
+    #describe_subnet $(tag2id ${userid}_subnet_a_perf)
+    #describe_subnet $(tag2id ${userid}_subnet_b_perf)
+    #describe_subnet $(tag2id ${userid}_subnet_c_perf)
+    describe_subnet $(tag2id ${userid}_vpc_perf)
     describe_route_table $(tag2id ${userid}_rtb_perf)
     describe_security_group $(tag2id ${userid}_sg_perf)
 }
