@@ -520,6 +520,31 @@ function delete_vpc_network()
 }
 
 
+function summary_resource()
+{
+    function tbprint()
+    {
+        #printf "%s | %s\n" "$1" "$2"
+        printf "%-22s %-15s\n" "$1" "$2"
+    }
+
+    # Summary resource
+    tbprint "ResourceTagName" "ResourceID"
+
+    tbprint "${userid}_vpc_perf" "$(tag2id ${userid}_vpc_perf)"
+    tbprint "${userid}_igw_perf" "$(tag2id ${userid}_igw_perf)"
+
+    subnets=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$(tag2id ${userid}_vpc_perf) --output json)
+    subnettags=$(echo $subnets | jq -r '.Subnets[].Tags[] | select(.Key == "Name") | .Value')
+    for subnettag in $subnettags; do
+        tbprint "$subnettag" "$(tag2id $subnettag)"
+    done
+
+    tbprint "${userid}_rtb_perf" "$(tag2id ${userid}_rtb_perf)"
+    tbprint "${userid}_sg_perf" "$(tag2id ${userid}_sg_perf)"
+}
+
+
 # main
 ipcidr=10.22.0.0/16
 userid=cheshi
@@ -527,5 +552,6 @@ userid=cheshi
 #create_vpc_network
 #describe_vpc_network
 #delete_vpc_network
+summary_resource
 
 exit 0
