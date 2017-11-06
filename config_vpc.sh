@@ -205,7 +205,8 @@ function create_subnet()
             echo "new subnet created, resource-id = $subnetid."
         else
             echo "$0: line $LINENO: \"aws ec2 create-subnet\" failed."
-            exit 1
+            echo "continue creating subnet in other zones if available."
+            continue
         fi
 
         # Create tag
