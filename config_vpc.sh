@@ -292,6 +292,7 @@ function create_route_table()
     if [ $? -eq 0 ]; then
         vpcid=$(echo $x | jq -r .RouteTables[].VpcId)
         tableid=$(echo $x | jq -r .RouteTables[].RouteTableId)
+        echo "find default route table $tableid in vpc $vpcid."
     else
         echo "$0: line $LINENO: \"aws ec2 describe-route-tables\" failed."
         exit 1
