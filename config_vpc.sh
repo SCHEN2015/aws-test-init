@@ -249,7 +249,7 @@ function describe_subnet()
         for subnetid in $subnetids; do
             describe_subnet $subnetid
         done
-        return $?
+        return 0
     fi
     return 1
 }
