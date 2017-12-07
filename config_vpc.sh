@@ -80,7 +80,7 @@ function describe_vpc()
 
 function delete_vpc()
 {
-    [ -z "$1" ] && exit 1 || vpcid=$1
+    [ -z "$1" ] && return 1 || vpcid=$1
     x=$(aws ec2 delete-vpc --vpc-id $vpcid --output json)
     if [ $? -eq 0 ]; then
         echo "deleted this vpc."
@@ -137,7 +137,7 @@ function describe_igw()
 
 function delete_igw()
 {
-    [ -z "$1" ] && exit 1 || igwid=$1
+    [ -z "$1" ] && return 1 || igwid=$1
 
     # Detach from VPC
     vpcid=$(tag2id ${userid}_vpc_perf)
@@ -257,7 +257,7 @@ function describe_subnet()
 
 function delete_subnet()
 {
-    [ -z "$1" ] && exit 1 || id=$1
+    [ -z "$1" ] && return 1 || id=$1
     if [[ $id = "subnet-"* ]]; then
         x=$(aws ec2 delete-subnet --subnet-id $id --output json)
         if [ $? -eq 0 ]; then
@@ -348,7 +348,7 @@ function describe_route_table()
 
 function delete_route_table()
 {
-    [ -z "$1" ] && exit 1 || tableid=$1
+    [ -z "$1" ] && return 1 || tableid=$1
 
     # Disassociate the route table with subnets (non-main association only)
     assids=$(aws ec2 describe-route-tables --route-table-ids $tableid --output json | jq -r '.RouteTables[].Associations[] | select(.Main == false) | .RouteTableAssociationId')
@@ -475,7 +475,7 @@ function describe_security_group()
 
 function delete_security_group()
 {
-    [ -z "$1" ] && exit 1 || groupid=$1
+    [ -z "$1" ] && return 1 || groupid=$1
     x=$(aws ec2 delete-security-group --group-id $groupid --output json)
     if [ $? -eq 0 ]; then
         echo "deleted this security group."
