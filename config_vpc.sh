@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Description:
+# This tool will help you creating the VPC for the further testing on AWS.
+# You will need to specify whether the VPC need to support IPv6.
+
+# History:
+# v1.0.0  2017-12-07  charles.shih  Initial version
+# v1.0.1  2018-11-02  charles.shih  Add description and history
+
+
 # Resource to be created:
 # vpc-12345678 | cheshi_vpc_perf
 # igw-12345678 | cheshi_igw_perf
