@@ -7,6 +7,7 @@
 # History:
 # v1.0.0  2017-12-07  charles.shih  Initial version
 # v1.0.1  2018-11-02  charles.shih  Add description and history
+# v2.0.0  2018-11-02  charles.shih  Support creating the ipv4-only VPC
 
 
 # Resource to be created:
@@ -40,7 +41,12 @@ function create_vpc()
     echo "creating vpc with CIDR block: ${ipcidr:="10.22.0.0/16"}"
 
     # Create VPC
-    x=$(aws ec2 create-vpc --cidr-block $ipcidr --amazon-provided-ipv6-cidr-block --instance-tenancy default --output json)
+	if [ "${ipv6_support}" = "true" ]; then
+		x=$(aws ec2 create-vpc --cidr-block $ipcidr --amazon-provided-ipv6-cidr-block --instance-tenancy default --output json)
+	else
+	    x=$(aws ec2 create-vpc --cidr-block $ipcidr --instance-tenancy default --output json)
+	fi
+
     if [ $? -eq 0 ]; then
         vpcid=$(echo $x | jq -r .Vpc.VpcId)
         echo "new vpc created, resource-id = $vpcid."
@@ -50,7 +56,7 @@ function create_vpc()
     fi
 
     # Create tag
-    x=$(aws ec2 create-tags --resources $vpcid --tags Key=Name,Value=${userid}_vpc_perf --output json)
+    x=$(aws ec2 create-tags --resources $vpcid --tags Key=Name,Value=${label}_vpc_perf --output json)
     if [ $? -eq 0 ]; then
         echo "tag created for this resource."
     else
@@ -116,7 +122,7 @@ function create_igw()
     fi
 
     # Create tag
-    x=$(aws ec2 create-tags --resources $igwid --tags Key=Name,Value=${userid}_igw_perf --output json)
+    x=$(aws ec2 create-tags --resources $igwid --tags Key=Name,Value=${label}_igw_perf --output json)
     if [ $? -eq 0 ]; then
         echo "tag created for this resource."
     else
@@ -125,7 +131,7 @@ function create_igw()
     fi
 
     # Attach to VPC
-    vpcid=$(tag2id ${userid}_vpc_perf)
+    vpcid=$(tag2id ${label}_vpc_perf)
     x=$(aws ec2 attach-internet-gateway --internet-gateway-id $igwid --vpc-id $vpcid --output json)
     if [ $? -eq 0 ]; then
         echo "attached igw to the vpc."
@@ -149,7 +155,7 @@ function delete_igw()
     [ -z "$1" ] && return 1 || igwid=$1
 
     # Detach from VPC
-    vpcid=$(tag2id ${userid}_vpc_perf)
+    vpcid=$(tag2id ${label}_vpc_perf)
     x=$(aws ec2 detach-internet-gateway --internet-gateway-id $igwid --vpc-id $vpcid --output json)
     if [ $? -eq 0 ]; then
         echo "detached igw from the vpc."
@@ -183,11 +189,14 @@ function create_subnet()
     #                  (Enable specified items)
 
     # Get VPC details
-    x=$(aws ec2 describe-vpcs --vpc-id $(tag2id ${userid}_vpc_perf) --output json)
+    x=$(aws ec2 describe-vpcs --vpc-id $(tag2id ${label}_vpc_perf) --output json)
     if [ $? -eq 0 ]; then
         vpcid=$(echo $x | jq -r .Vpcs[].VpcId)
         ipv4blk=$(echo $x | jq -r .Vpcs[].CidrBlock)
-        ipv6blk=$(echo $x | jq -r .Vpcs[].Ipv6CidrBlockAssociationSet[].Ipv6CidrBlock)
+
+		if [ "${ipv6_support}" = "true" ]; then
+			ipv6blk=$(echo $x | jq -r .Vpcs[].Ipv6CidrBlockAssociationSet[].Ipv6CidrBlock)
+		fi
     else
         echo "$0: line $LINENO: \"aws ec2 describe-vpcs\" failed."
         exit 1
@@ -204,11 +213,20 @@ function create_subnet()
 
         # Subnet parameter
         ipv4=$(echo $ipv4blk | sed "s/0.0\/16/${n}.0\/24/")
-        ipv6=$(echo $ipv6blk | sed "s/00::\/56/0${n}::\/64/")
-        tag="${userid}_subnet_${l}_perf"
+
+		if [ "${ipv6_support}" = "true" ]; then
+			ipv6=$(echo $ipv6blk | sed "s/00::\/56/0${n}::\/64/")
+		fi
+
+        tag="${label}_subnet_${l}_perf"
 
         # Create subnet
-        x=$(aws ec2 create-subnet --vpc-id $vpcid --availability-zone $zone --cidr-block $ipv4 --ipv6-cidr-block $ipv6 --output json)
+		if [ "${ipv6_support}" = "true" ]; then
+			x=$(aws ec2 create-subnet --vpc-id $vpcid --availability-zone $zone --cidr-block $ipv4 --ipv6-cidr-block $ipv6 --output json)
+		else
+			x=$(aws ec2 create-subnet --vpc-id $vpcid --availability-zone $zone --cidr-block $ipv4 --output json)
+		fi
+
         if [ $? -eq 0 ]; then
             subnetid=$(echo $x | jq -r .Subnet.SubnetId)
             echo "new subnet created, resource-id = $subnetid."
@@ -236,13 +254,15 @@ function create_subnet()
             exit 1
         fi
 
-        x=$(aws ec2 modify-subnet-attribute --subnet-id $subnetid --assign-ipv6-address-on-creation --output json)
-        if [ $? -eq 0 ]; then
-            echo "configured auto assign IPv6 address."
-        else
-            echo "$0: line $LINENO: \"aws ec2 modify-subnet-attribute\" failed."
-            exit 1
-        fi
+		if [ "${ipv6_support}" = "true" ]; then
+			x=$(aws ec2 modify-subnet-attribute --subnet-id $subnetid --assign-ipv6-address-on-creation --output json)
+			if [ $? -eq 0 ]; then
+				echo "configured auto assign IPv6 address."
+			else
+				echo "$0: line $LINENO: \"aws ec2 modify-subnet-attribute\" failed."
+				exit 1
+			fi
+		fi
     done
 }
 
@@ -297,7 +317,7 @@ function create_route_table()
     # We don't need to create a new route table, we can use the default one.
 
     # Get route table information
-    x=$(aws ec2 describe-route-tables --filters Name=vpc-id,Values=$(tag2id ${userid}_vpc_perf) --output json)
+    x=$(aws ec2 describe-route-tables --filters Name=vpc-id,Values=$(tag2id ${label}_vpc_perf) --output json)
     if [ $? -eq 0 ]; then
         vpcid=$(echo $x | jq -r .RouteTables[].VpcId)
         tableid=$(echo $x | jq -r .RouteTables[].RouteTableId)
@@ -308,7 +328,7 @@ function create_route_table()
     fi
 
     # Create tag
-    x=$(aws ec2 create-tags --resources $tableid --tags Key=Name,Value=${userid}_rtb_perf --output json)
+    x=$(aws ec2 create-tags --resources $tableid --tags Key=Name,Value=${label}_rtb_perf --output json)
     if [ $? -eq 0 ]; then
         echo "tag created for this resource."
     else
@@ -317,7 +337,7 @@ function create_route_table()
     fi
 
     # Create routes for the route table
-    x=$(aws ec2 create-route --route-table-id $tableid --destination-cidr-block 0.0.0.0/0 --gateway-id $(tag2id ${userid}_igw_perf) --output json)
+    x=$(aws ec2 create-route --route-table-id $tableid --destination-cidr-block 0.0.0.0/0 --gateway-id $(tag2id ${label}_igw_perf) --output json)
     if [ $? -eq 0 ]; then
         echo "created a route for this route table."
     else
@@ -325,13 +345,15 @@ function create_route_table()
         exit 1
     fi
 
-    x=$(aws ec2 create-route --route-table-id $tableid --destination-ipv6-cidr-block ::/0 --gateway-id $(tag2id ${userid}_igw_perf) --output json)
-    if [ $? -eq 0 ]; then
-        echo "created a route for this route table."
-    else
-        echo "$0: line $LINENO: \"aws ec2 create-route\" failed."
-        exit 1
-    fi
+	if [ "${ipv6_support}" = "true" ]; then
+		x=$(aws ec2 create-route --route-table-id $tableid --destination-ipv6-cidr-block ::/0 --gateway-id $(tag2id ${label}_igw_perf) --output json)
+		if [ $? -eq 0 ]; then
+			echo "created a route for this route table."
+		else
+			echo "$0: line $LINENO: \"aws ec2 create-route\" failed."
+			exit 1
+		fi
+	fi
 
     # Associate the route table with subnets
     subnetids=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$vpcid --output json | jq -r .Subnets[].SubnetId)
@@ -407,7 +429,7 @@ function create_security_group()
     # | ALL ICMP - IPv6 | IPv6-ICMP (58) | ALL            | ::/0            |
 
     # Create security group
-    x=$(aws ec2 create-security-group --group-name ${userid}_sg_openall --description "Testing purpose only, opening to the world, be careful about the security." --vpc-id $(tag2id ${userid}_vpc_perf) --output json)
+    x=$(aws ec2 create-security-group --group-name ${label}_sg_openall --description "Testing purpose only, opening to the world, be careful about the security." --vpc-id $(tag2id ${label}_vpc_perf) --output json)
     if [ $? -eq 0 ]; then
         groupid=$(echo $x | jq -r .GroupId)
         echo "new security group created, resource-id = $groupid."
@@ -417,7 +439,7 @@ function create_security_group()
     fi
 
     # Create tag
-    x=$(aws ec2 create-tags --resources $groupid --tags Key=Name,Value=${userid}_sg_perf --output json)
+    x=$(aws ec2 create-tags --resources $groupid --tags Key=Name,Value=${label}_sg_perf --output json)
     if [ $? -eq 0 ]; then
         echo "tag created for this resource."
     else
@@ -509,25 +531,25 @@ function create_vpc_network()
 function describe_vpc_network()
 {
     date
-    describe_vpc $(tag2id ${userid}_vpc_perf)
-    describe_igw $(tag2id ${userid}_igw_perf)
-    #describe_subnet $(tag2id ${userid}_subnet_a_perf)
-    #describe_subnet $(tag2id ${userid}_subnet_b_perf)
-    #describe_subnet $(tag2id ${userid}_subnet_c_perf)
-    describe_subnet $(tag2id ${userid}_vpc_perf)
-    describe_route_table $(tag2id ${userid}_rtb_perf)
-    describe_security_group $(tag2id ${userid}_sg_perf)
+    describe_vpc $(tag2id ${label}_vpc_perf)
+    describe_igw $(tag2id ${label}_igw_perf)
+    #describe_subnet $(tag2id ${label}_subnet_a_perf)
+    #describe_subnet $(tag2id ${label}_subnet_b_perf)
+    #describe_subnet $(tag2id ${label}_subnet_c_perf)
+    describe_subnet $(tag2id ${label}_vpc_perf)
+    describe_route_table $(tag2id ${label}_rtb_perf)
+    describe_security_group $(tag2id ${label}_sg_perf)
 }
 
 
 function delete_vpc_network()
 {
     date
-    delete_security_group $(tag2id ${userid}_sg_perf)
-    delete_route_table $(tag2id ${userid}_rtb_perf)
-    delete_subnet $(tag2id ${userid}_vpc_perf)
-    delete_igw $(tag2id ${userid}_igw_perf)
-    delete_vpc $(tag2id ${userid}_vpc_perf)
+    delete_security_group $(tag2id ${label}_sg_perf)
+    delete_route_table $(tag2id ${label}_rtb_perf)
+    delete_subnet $(tag2id ${label}_vpc_perf)
+    delete_igw $(tag2id ${label}_igw_perf)
+    delete_vpc $(tag2id ${label}_vpc_perf)
 }
 
 
@@ -542,23 +564,30 @@ function summary_resource()
     # Summary resource
     tbprint "ResourceTagName" "ResourceID"
 
-    tbprint "${userid}_vpc_perf" "$(tag2id ${userid}_vpc_perf)"
-    tbprint "${userid}_igw_perf" "$(tag2id ${userid}_igw_perf)"
+    tbprint "${label}_vpc_perf" "$(tag2id ${label}_vpc_perf)"
+    tbprint "${label}_igw_perf" "$(tag2id ${label}_igw_perf)"
 
-    subnets=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$(tag2id ${userid}_vpc_perf) --output json)
+    subnets=$(aws ec2 describe-subnets --filters Name=vpc-id,Values=$(tag2id ${label}_vpc_perf) --output json)
     subnettags=$(echo $subnets | jq -r '.Subnets[].Tags[] | select(.Key == "Name") | .Value')
     for subnettag in $subnettags; do
         tbprint "$subnettag" "$(tag2id $subnettag)"
     done
 
-    tbprint "${userid}_rtb_perf" "$(tag2id ${userid}_rtb_perf)"
-    tbprint "${userid}_sg_perf" "$(tag2id ${userid}_sg_perf)"
+    tbprint "${label}_rtb_perf" "$(tag2id ${label}_rtb_perf)"
+    tbprint "${label}_sg_perf" "$(tag2id ${label}_sg_perf)"
 }
 
 
 # main
+
+ipv6_support=true
 ipcidr=10.22.0.0/16
-userid=cheshi
+
+if [ "${ipv6_support}" = "true" ]; then
+	label=ipv6
+else
+	label=ipv4
+fi
 
 #create_vpc_network
 #describe_vpc_network
@@ -566,3 +595,4 @@ userid=cheshi
 summary_resource
 
 exit 0
+
