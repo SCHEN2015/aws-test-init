@@ -3,6 +3,8 @@ Do essential initialization for AWS testing
 
 # VPC
 
+To run `config_vpc.sh` you need to have `jq` installed. This tool can be installed by `sudo yum install jq`.
+
 ```
 Usage:
   config_vpc.sh -h
