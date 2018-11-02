@@ -9,6 +9,7 @@
 # v1.0.1  2018-11-02  charles.shih  Add description and history
 # v2.0.0  2018-11-02  charles.shih  Support creating the ipv4-only VPC
 # v2.0.1  2018-11-02  charles.shih  Instead blanks with tables for indent
+# v3.0.0  2018-11-02  charles.shih  Add user interface to use the tool
 
 
 # Resource to be created:
@@ -580,20 +581,119 @@ function summary_resource()
 
 
 # main
+function usage() {
+	echo
+	echo "Usage:"
+	echo "  config_vpc.sh -h"
+	echo "  config_vpc.sh -c [-i <ipv4_icdr>] [-l <label>] [-4]"
+	echo "  config_vpc.sh <-d|-r|-s> [-l <label>] [-4]"
+	echo
+	echo "Params:"
+	echo "  -h: show this help"
+	echo "  -c: create a new VPC"
+	echo "  -d: describe a specified VPC"
+	echo "  -r: delete a specified VPC"
+	echo "  -s: summary the resources related to a specified VPC"
+	echo "  -i: specify an IPv4 ICDR block for creating an VPC"
+	echo "  -l: specify the label for an VPC"
+	echo "  -4: specify an IPv4 only mode for this tool"
+	echo
+	echo "Examples:"
+	echo "  config_vpc.sh -c                  # creating an VPC with default options"
+	echo "  config_vpc.sh -c -4               # creating an VPC without IPv6 support"
+	echo "  config_vpc.sh -c -i 10.23.0.0/16  # creating an VPC with specified IPv4 ICDR"
+	echo "  config_vpc.sh -c -l cheshi        # creating an VPC with specified label"
+	echo "                                      it generates 'cheshi_vpc_perf' ..."
+	echo "  config_vpc.sh -d -l cheshi        # describe VPC 'cheshi_vpc_perf' and its resources"
+	echo "  config_vpc.sh -r -l cheshi        # remove VPC 'cheshi_vpc_perf' and its resources"
+	echo "  config_vpc.sh -s -l cheshi        # summary the resources from VPC 'cheshi_vpc_perf'"
+	echo "  config_vpc.sh -s                  # summary the resources from VPC 'ipv6_vpc_perf'"
+	echo "  config_vpc.sh -s -4               # summary the resources from VPC 'ipv4_vpc_perf'"
+	echo
+}
 
-ipv6_support=true
-ipcidr=10.22.0.0/16
+[ "$#" -eq 0 ] && usage && exit 0
 
-if [ "${ipv6_support}" = "true" ]; then
-	label=ipv6
-else
-	label=ipv4
+while getopts "hcdrsl:4i:" opt; do
+	case $opt in
+		h)
+			usage
+			exit 0
+			;;
+		c)
+			[ -n "$op" ] && echo "Options conflict." && exit 1
+			op=create
+			;;
+		d)
+			[ -n "$op" ] && echo "Options conflict." && exit 1
+			op=describe
+			;;
+		r)
+			[ -n "$op" ] && echo "Options conflict." && exit 1
+			op=remove
+			;;
+		s)
+			[ -n "$op" ] && echo "Options conflict." && exit 1
+			op=summary
+			;;
+		l)
+			label=$OPTARG
+			;;
+		4)
+			ipv6_support=false
+			;;
+		i)
+			ipcidr=$OPTARG
+			;;
+		\?)
+			echo "Invalid option."
+			usage
+			exit 1
+			;;
+	esac
+done
+
+
+: ${ipv6_support:=true}
+: ${ipcidr:="10.22.0.0/16"}
+
+if [ -z "$label" ]; then
+	[ "${ipv6_support}" = "true" ] && label=ipv6 || label=ipv4
 fi
 
-#create_vpc_network
-#describe_vpc_network
-#delete_vpc_network
-summary_resource
+case "$op" in
+	create)
+		echo "Create VPC and its resources with..."
+		echo "VPC Name: ${label}_vpc_perf"
+		echo "IPv6 Support: ${ipv6_support}"
+		echo "IPv4 ICDR Block: $ipcidr"
+		echo && read -p "Do you want to continue? [y] " resp
+		[ "${resp:-y}" = "y" ] && create_vpc_network
+		exit 0
+		;;
+	describe)
+		echo "Describe VPC \"${label}_vpc_perf\" and its resources..."
+		echo && read -p "Do you want to continue? [y] " resp
+		[ "${resp:-y}" = "y" ] && describe_vpc_network
+		exit 0
+		;;
+	delete)
+		echo "Delete VPC \"${label}_vpc_perf\" and its resources..."
+		echo && read -p "Do you want to continue? [y] " resp
+		[ "${resp:-y}" = "y" ] && delete_vpc_network
+		exit 0
+		;;
+	summary)
+		echo "Summary the resources from VPC \"${label}_vpc_perf\"..."
+		echo && read -p "Do you want to continue? [y] " resp
+		[ "${resp:-y}" = "y" ] && summary_resource
+		exit 0
+		;;
+	*)
+		usage
+		exit 1
+		;;
+esac
 
 exit 0
 
